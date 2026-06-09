@@ -608,10 +608,27 @@ function initMSAL(){
   }catch(e){console.error('Errore MSAL init:',e);}
 }
 async function loginMS(){
-  // Reinizializza MSAL se necessario
   if(!window._msal){initMSAL();}
   if(!window._msal){toast("❌ Errore inizializzazione MSAL","err");return;}
-  try{const r=await window._msal.loginPopup({scopes:["User.Read","Sites.ReadWrite.All"]});CU={id:r.account.localAccountId,name:r.account.name,ini:r.account.name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase(),email:r.account.username,dept:"Aziendale",role:"user"};enterApp();}catch(e){toast("Errore: "+e.message,"err");}}
+  try{
+    // Controlla se c'è già un account loggato (dopo redirect)
+    const accounts = window._msal.getAllAccounts();
+    if(accounts.length > 0){
+      const r = await window._msal.acquireTokenSilent({
+        scopes:["User.Read"],
+        account: accounts[0]
+      });
+      CU={id:accounts[0].localAccountId,name:accounts[0].name,ini:accounts[0].name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase(),email:accounts[0].username,dept:"Aziendale",role:"user"};
+      enterApp();
+      return;
+    }
+    // Usa redirect invece di popup (compatibile con Safari mobile)
+    await window._msal.loginRedirect({
+      scopes:["User.Read","Sites.ReadWrite.All"],
+      redirectUri: CFG.redirectUri
+    });
+  }catch(e){toast("Errore: "+e.message,"err");}
+}
 function loginDemo(){const s=document.getElementById('dsel').value;if(!s){toast("Seleziona un profilo","err");return;}CU={...US[s]};enterApp();}
 function logout(){CU=null;document.getElementById('app').style.display='none';document.getElementById('login').style.display='flex';document.getElementById('dsel').value='';}
 
@@ -1127,6 +1144,37 @@ function toast(msg,type='ok'){const c=document.getElementById('toasts');const t=
 /* INIT */
 initMSAL();
 document.getElementById('lo-brand').textContent='FLP Desk';
+
+// Gestisci il ritorno dal redirect Microsoft login
+if(window._msal){
+  window._msal.handleRedirectPromise().then(response => {
+    if(response && response.account){
+      CU={
+        id:response.account.localAccountId,
+        name:response.account.name,
+        ini:response.account.name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase(),
+        email:response.account.username,
+        dept:"Aziendale",
+        role:"user"
+      };
+      enterApp();
+    } else {
+      // Controlla se già loggato
+      const accounts = window._msal.getAllAccounts();
+      if(accounts.length > 0){
+        CU={
+          id:accounts[0].localAccountId,
+          name:accounts[0].name,
+          ini:accounts[0].name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase(),
+          email:accounts[0].username,
+          dept:"Aziendale",
+          role:"user"
+        };
+        enterApp();
+      }
+    }
+  }).catch(e => console.error('Redirect error:', e));
+}
 </script>
 </body>
 </html>
