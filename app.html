@@ -4,7 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <title>FLP Desk</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-authentication-library/2.38.3/msal-browser.min.js"></script>
+<script>
+// Carica MSAL con fallback
+(function(){
+  var s=document.createElement('script');
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/microsoft-authentication-library/2.38.3/msal-browser.min.js';
+  s.onerror=function(){
+    var s2=document.createElement('script');
+    s2.src='https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js';
+    document.head.appendChild(s2);
+  };
+  document.head.appendChild(s);
+})();
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -584,8 +596,25 @@ function isExp(m){return dAgo(m.date)>=(m.urgent?CFG.dtU:CFG.dtS);}
 function isEsc(m){return dAgo(m.date)>=(m.urgent?CFG.dtU:CFG.dtS)+CFG.dtE;}
 
 let CU=null,offQ=[],online=true,_sel=null,_uploadedFiles=[];
-function initMSAL(){try{window._msal=new msal.PublicClientApplication({auth:{clientId:CFG.clientId,authority:`https://login.microsoftonline.com/${CFG.tenantId}`,redirectUri:CFG.redirectUri},cache:{cacheLocation:"localStorage"}})}catch(e){}}
-async function loginMS(){if(!window._msal||CFG.clientId==="YOUR_CLIENT_ID"){toast("⚙️ Configura clientId/tenantId in CFG per il login reale","warn");return;}try{const r=await window._msal.loginPopup({scopes:["User.Read","Sites.ReadWrite.All"]});CU={id:r.account.localAccountId,name:r.account.name,ini:r.account.name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase(),email:r.account.username,dept:"Aziendale",role:"user"};enterApp();}catch(e){toast("Errore: "+e.message,"err");}}
+function initMSAL(){
+  try{
+    if(typeof msal === 'undefined'){console.error('MSAL non caricato');return;}
+    window._msal=new msal.PublicClientApplication({
+      auth:{
+        clientId:CFG.clientId,
+        authority:"https://login.microsoftonline.com/"+CFG.tenantId,
+        redirectUri:CFG.redirectUri
+      },
+      cache:{cacheLocation:"sessionStorage",storeAuthStateInCookie:true}
+    });
+    console.log('MSAL inizializzato OK, clientId:',CFG.clientId);
+  }catch(e){console.error('Errore MSAL:',e);}
+}
+async function loginMS(){
+  // Reinizializza MSAL se necessario
+  if(!window._msal){initMSAL();}
+  if(!window._msal){toast("❌ Errore inizializzazione MSAL","err");return;}
+  try{const r=await window._msal.loginPopup({scopes:["User.Read","Sites.ReadWrite.All"]});CU={id:r.account.localAccountId,name:r.account.name,ini:r.account.name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase(),email:r.account.username,dept:"Aziendale",role:"user"};enterApp();}catch(e){toast("Errore: "+e.message,"err");}}
 function loginDemo(){const s=document.getElementById('dsel').value;if(!s){toast("Seleziona un profilo","err");return;}CU={...US[s]};enterApp();}
 function logout(){CU=null;document.getElementById('app').style.display='none';document.getElementById('login').style.display='flex';document.getElementById('dsel').value='';}
 
