@@ -615,8 +615,23 @@ async function loginMS(){
 function loginDemo(){const s=document.getElementById('dsel').value;if(!s){toast("Seleziona un profilo","err");return;}CU={...US[s]};enterApp();}
 function logout(){CU=null;document.getElementById('app').style.display='none';document.getElementById('login').style.display='flex';document.getElementById('dsel').value='';}
 
+// Lista email amministratori FLP Desk
+// ═══════════════════════════════════════════
+// AMMINISTRATORI FLP DESK
+// Aggiungi qui le email di tutti gli admin
+// ═══════════════════════════════════════════
+const ADMIN_EMAILS = [
+  "mlaus@flpsa.ch",        // Manuele Laus
+  // "altro.admin@flpsa.ch",  // Aggiungi altri admin qui
+];
+
 function enterApp(){
   initST();
+  // Assegna ruolo admin se email è nella lista
+  if(CU.email && ADMIN_EMAILS.some(e => CU.email.toLowerCase() === e.toLowerCase())){
+    CU.role = 'admin';
+    CU.dept = 'Amministratore';
+  }
   document.getElementById('login').style.display='none';
   document.getElementById('app').style.display='flex';
   document.getElementById('tb-un').textContent=CU.name;
