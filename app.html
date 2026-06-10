@@ -1070,14 +1070,76 @@ function initMSAL(){
 }
 
 /* ═══════════════════════
+   MICROSOFT GRAPH — carica utenti reali
+   ═══════════════════════ */
+let REAL_USERS = [];
+
+async function loadUsersFromGraph(token){
+  try{
+    const resp = await fetch(
+      'https://graph.microsoft.com/v1.0/users?$filter=accountEnabled eq true&$select=id,displayName,mail,department,jobTitle&$top=50',
+      {headers:{Authorization:'Bearer '+token}}
+    );
+    if(!resp.ok){console.warn('Graph users error:',resp.status);return;}
+    const data = await resp.json();
+    REAL_USERS = (data.value||[])
+      .filter(u=>u.mail&&u.mail.toLowerCase().endsWith('@flpsa.ch'))
+      .map(u=>({
+        id: u.id,
+        name: u.displayName||u.mail,
+        ini: (u.displayName||u.mail).split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase(),
+        dept: u.department||u.jobTitle||'FLP',
+        email: u.mail.toLowerCase()
+      }));
+    console.log(`✅ Caricati ${REAL_USERS.length} utenti da Graph`);
+    // Aggiorna DEMO_USERS con quelli reali se disponibili
+    if(REAL_USERS.length>0){
+      // Rimuovi l'utente corrente dalla lista (è l'admin)
+      const filtered = REAL_USERS.filter(u=>u.email!==CU.email.toLowerCase());
+      if(filtered.length>0){
+        DEMO_USERS.length=0;
+        filtered.forEach(u=>DEMO_USERS.push(u));
+      }
+    }
+  }catch(e){console.warn('Graph load error:',e);}
+}
+
+async function getGraphToken(){
+  try{
+    if(!window._msal)return null;
+    const accounts=window._msal.getAllAccounts();
+    if(!accounts.length)return null;
+    const resp=await window._msal.acquireTokenSilent({
+      scopes:['User.ReadBasic.All'],
+      account:accounts[0]
+    });
+    return resp.accessToken;
+  }catch(e){
+    console.warn('Token error:',e);
+    return null;
+  }
+}
+
+/* ═══════════════════════
    AVVIO
    ═══════════════════════ */
 initMSAL();
 
 if(window._msal){
-  window._msal.handleRedirectPromise().then(resp=>{
-    if(resp&&resp.account){setCU(resp.account);}
-    else{const accs=window._msal.getAllAccounts();if(accs.length>0)setCU(accs[0]);}
+  window._msal.handleRedirectPromise().then(async resp=>{
+    if(resp&&resp.account){
+      setCU(resp.account);
+      const token=await getGraphToken();
+      if(token)await loadUsersFromGraph(token);
+    }
+    else{
+      const accs=window._msal.getAllAccounts();
+      if(accs.length>0){
+        setCU(accs[0]);
+        const token=await getGraphToken();
+        if(token)await loadUsersFromGraph(token);
+      }
+    }
   }).catch(e=>console.error('Redirect:',e));
 }
 </script>
